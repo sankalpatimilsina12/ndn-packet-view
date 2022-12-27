@@ -1,0 +1,39 @@
+{
+  "name": "analyser-web",
+  "scripts": {
+    "build": "parcel build src/index.html --no-autoinstall --public-url ./",
+    "lint": "xo --fix",
+    "start": "parcel src/index.html --no-autoinstall"
+  },
+  "dependencies": {
+    "@ndn/naming-convention2": "0.0.20200909",
+    "@ndn/packet": "0.0.20200909",
+    "@ndn/tlv": "0.0.20200909",
+    "chart.js": "^2.9.3",
+    "chartjs-chart-graph": "^2.2.1",
+    "chartjs-plugin-datalabels": "^0.7.0",
+    "hashquery": "^1.0.0",
+    "mitt": "^2.1.0",
+    "purecss": "^2.0.3",
+    "redom": "^3.27.1"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.12.3",
+    "babel-plugin-transform-redom-jsx": "^3.0.1",
+    "parcel-bundler": "^1.12.4"
+  },
+  "babel": {
+    "plugins": [
+      "babel-plugin-transform-redom-jsx",
+      [
+        "@babel/plugin-transform-react-jsx",
+        {
+          "pragma": "el"
+        }
+      ]
+    ]
+  },
+  "browserslist": [
+    "since 2017-06"
+  ]
+}
