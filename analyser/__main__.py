@@ -1,10 +1,9 @@
 from aiohttp import web
-from motor.motor_asyncio import AsyncIOMotorClient
 from api import routes_http
 import asyncio
 import aiohttp_cors
 import sys
-from definitions import SITE_HOST, SITE_PORT, MONGO_HOST, MONGO_DB_NAME
+from settings import SITE_HOST, SITE_PORT, DB_CLIENT, DB
 
 
 async def start_server():
@@ -22,11 +21,10 @@ async def start_server():
     for route in list(app.router.routes()):
         cors.add(route)
 
-    client = AsyncIOMotorClient(MONGO_HOST)
-    app['db'] = client[MONGO_DB_NAME]
+    app['db'] = DB
 
     async def cleanup():
-        client.close()
+        DB_CLIENT.close()
     app.on_cleanup.append(cleanup)
 
     runner = web.AppRunner(app)
@@ -35,6 +33,7 @@ async def start_server():
     site = web.TCPSite(runner, SITE_HOST, SITE_PORT)
     await site.start()
     print(f'Server started at http://{SITE_HOST}:{SITE_PORT}')
+
 
 if __name__ == '__main__':
     if sys.version_info < (3, 7):
