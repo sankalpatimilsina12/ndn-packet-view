@@ -18,7 +18,11 @@ class Indexer:
             data = json.load(json_file)
 
         for packet in data:
-            ndn_layer = packet['_source']['layers']['ndn']
+            try:
+                ndn_layer = packet['_source']['layers']['ndn']
+            except KeyError:
+                LOGGER.error(f'Error: The packet {packet} does not contain NDN layer')
+                continue
             if 'ndn_interest' in ndn_layer:
                 self._index_packet(MONGO_COLLECTION_INTEREST, packet)
             elif 'ndn_data' in ndn_layer:
