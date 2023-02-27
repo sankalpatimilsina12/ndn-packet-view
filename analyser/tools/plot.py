@@ -1,24 +1,67 @@
 import asyncio
 import argparse
 from datetime import datetime, timedelta
-from matplotlib import cm, ticker
+from matplotlib import cm, patches, ticker
 import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
 import numpy as np
 from settings import DB, LOGGER, MONGO_COLLECTION_INTEREST, MONGO_COLLECTION_DATA, \
     MONGO_COLLECTION_LP_PACKET_INTEREST, MONGO_COLLECTION_LP_PACKET_DATA
 
 
 class Plot:
-    SCATTER = 'scatter'
-    BAR = 'bar'
-    CDF = 'cdf'
+    PACKETS_HISTOGRAM = 'packets_histogram'
+    COMPONENTS_HEXBIN = 'components_hexbin'
+    COMPONENTS_CDF = 'components_cdf'
 
     def __init__(self, db, collections):
         self.db = db
         self.collections = collections
 
-    async def components_cdf(self):
+    async def _components_hexbin(self):
+        i_d = []
+        d_d = []
+        pipeline = [{'$project': {'_id': 0, '_source.layers.ndn': 1}}]
+        for collection in self.collections.values():
+            async for document in self.db[collection].aggregate(pipeline):
+                if collection in [self.collections['INTEREST'], self.collections['DATA']]:
+                    n = document['_source']['layers']['ndn']['ndn_name']
+                    num_c = len(n.split('/'))
+                    name_len = len(n)
+                    if collection == self.collections['INTEREST']:
+                        i_d.append((num_c, name_len))
+                    else:
+                        d_d.append((num_c, name_len))
+                elif collection in [self.collections['LP_PACKET_INTEREST'], self.collections['LP_PACKET_DATA']]:
+                    n = document['_source']['layers']['ndn'][1]['ndn_name']
+                    num_c = len(n.split('/'))
+                    name_len = len(n)
+                    if collection == self.collections['LP_PACKET_INTEREST']:
+                        i_d.append((num_c, name_len))
+                    else:
+                        d_d.append((num_c, name_len))
+
+        fig, ax = plt.subplots(figsize=(12, 7))
+        hb1 = ax.hexbin(*zip(*i_d), gridsize=25, cmap='Blues',
+                        alpha=0.9, edgecolor='gray', mincnt=2000)
+        hb2 = ax.hexbin(*zip(*d_d), gridsize=25, cmap='Oranges',
+                        alpha=0.9, edgecolor='gray', mincnt=2000)
+
+        cb1 = fig.colorbar(hb1)
+        cb1.set_label('Interest Frequency', fontsize=12)
+        cb2 = fig.colorbar(hb2)
+        cb2.set_label('Data Frequency', fontsize=12)
+
+        ax.set_title('Name Length vs Number of Components', fontsize=16)
+        ax.set_xlabel('Number of Components', fontsize=12)
+        ax.set_ylabel('Name Length', fontsize=12)
+
+        handles = [patches.Patch(color=cm.Blues(0.5), label='Interest'),
+                   patches.Patch(color=cm.Oranges(0.5), label='Data')]
+        ax.legend(handles=handles, fontsize=12)
+
+        plt.show()
+
+    async def _components_cdf(self):
         interests = self.db[self.collections['INTEREST']]
         data = self.db[self.collections['DATA']]
         lp_interest = self.db[self.collections['LP_PACKET_INTEREST']]
@@ -69,7 +112,7 @@ class Plot:
         ax.legend()
         plt.show()
 
-    async def packets_per_duration(self, plot_type, duration):
+    async def _packets_histogram(self, duration):
         i_ts = []
         d_ts = []
         for collection in self.collections.values():
@@ -118,47 +161,44 @@ class Plot:
 
         # plot
         _, ax = plt.subplots(figsize=(10, 7))
-        if plot_type == Plot.BAR:
-            rshift = 1
-            ax.bar(np.arange(num_durations) + rshift / 2, interest_num_packets,
-                   color=cm.Paired(0), label='Interest packets')
-            ax.bar(np.arange(num_durations) + rshift / 2,
-                   data_num_packets, color=cm.Paired(1), label='Data packets')
-            duration_labels = [(start_time + timedelta(minutes=i * duration)).strftime('%-I %p')
-                               for i in range(num_durations + rshift)]
-            ax.xaxis.set_major_formatter(ticker.FuncFormatter(
-                lambda x, pos: duration_labels[int(x)] if x < len(duration_labels) else ''))
+        rshift = 1
+        ax.bar(np.arange(num_durations) + rshift / 2, interest_num_packets,
+               color=cm.Paired(0), label='Interest packets')
+        ax.bar(np.arange(num_durations) + rshift / 2,
+               data_num_packets, color=cm.Paired(1), label='Data packets')
+        duration_labels = [(start_time + timedelta(minutes=i * duration)).strftime('%-I %p')
+                           for i in range(num_durations + rshift)]
+        ax.xaxis.set_major_formatter(ticker.FuncFormatter(
+            lambda x, pos: duration_labels[int(x)] if x < len(duration_labels) else ''))
 
-        elif plot_type == Plot.SCATTER:
-            ax.scatter(interest_ts, interest_num_packets,
-                       label='Interest packets')
-            ax.scatter(data_ts, data_num_packets, label='Data packets')
-            ax.xaxis.set_major_locator(mdates.AutoDateLocator())
-            ax.xaxis.set_major_formatter(mdates.DateFormatter('%-I %p'))
-
-        ax.set_title(f'Packets received per {duration} minutes')
+        ax.set_title(f'Packets per {duration} minutes')
         ax.set_xlabel('Timestamp')
         ax.set_ylabel(f'Packets per {duration} minutes')
         ax.legend()
         plt.show()
 
     async def plot(self, plot_type, duration):
-        if plot_type in [self.BAR, self.SCATTER]:
-            await self.packets_per_duration(plot_type, duration)
-        elif plot_type == self.CDF:
-            await self.components_cdf()
+        if plot_type == Plot.PACKETS_HISTOGRAM:
+            await self._packets_histogram(duration)
+        elif plot_type == Plot.COMPONENTS_HEXBIN:
+            await self._components_hexbin()
+        elif plot_type == Plot.COMPONENTS_CDF:
+            await self._components_cdf()
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Plot NDN packet statistics.', prog='python -m tools.plot')
-    parser.add_argument('--plot_type', default=Plot.SCATTER, choices=[Plot.SCATTER, Plot.BAR, Plot.CDF],
-                        help=f'Type of plot to generate (available: {", ".join([Plot.SCATTER, Plot.BAR, Plot.CDF])}))')
+
+    parser.add_argument('--plot_type', default='packets_histogram',
+                        choices=[Plot.PACKETS_HISTOGRAM,
+                                 Plot.COMPONENTS_HEXBIN, Plot.COMPONENTS_CDF],
+                        help=f'Select plot type from {", ".join([Plot.PACKETS_HISTOGRAM, Plot.COMPONENTS_HEXBIN, Plot.COMPONENTS_CDF])} (default: {Plot.PACKETS_HISTOGRAM})')
     parser.add_argument('--duration', default=60, type=int,
-                        help='Duration in minutes to group packets (default: 60) (applicable only for "scatter" and "bar" plots)')
+                        help=f'Duration in minutes to group packets (default: 60) (applicable only for packets_histogram plot)')
     args = parser.parse_args()
 
-    if args.plot_type in [Plot.SCATTER, Plot.BAR] and args.duration <= 0:
+    if args.plot_type == Plot.PACKETS_HISTOGRAM and args.duration <= 0:
         LOGGER.error(
             f'Error: Invalid duration provided for {args.plot_type} plot')
         exit(1)
