@@ -53,11 +53,11 @@ class Plot:
         cb2 = fig.colorbar(hb2)
         cb2.set_label('Data Frequency', fontsize=12)
 
-        ax.set_title('Name Length vs Number of Components', fontsize=16)
         ax.set_xlabel('Number of Components', fontsize=12)
         ax.set_ylabel('Name Length (Bytes)', fontsize=12)
 
         ax.grid(axis='y')
+        ax.set_ylim(bottom=0)
         ax.yaxis.set_ticks(np.arange(0, ax.get_ylim()[1], 100))
 
         if self.save_fig:
@@ -108,7 +108,6 @@ class Plot:
         ax.plot(i_bin_edges[:-1], i_cdf, label='Interest')
         ax.plot(d_bin_edges[:-1], d_cdf, label='Data')
 
-        ax.set_title('Name Components CDF', fontsize=20)
         ax.set_xlabel('Number of Components', fontsize=16)
         ax.set_ylabel('Percentile', fontsize=16)
         ax.tick_params(labelsize=14)
@@ -184,7 +183,6 @@ class Plot:
         ax.xaxis.set_major_formatter(ticker.FuncFormatter(
             lambda x, pos: duration_labels[int(x)] if x < len(duration_labels) else ''))
 
-        ax.set_title(f'Packets per {duration} minutes')
         ax.set_xlabel('Timestamp')
         ax.set_ylabel(f'Packets per {duration} minutes')
         ax.legend()
