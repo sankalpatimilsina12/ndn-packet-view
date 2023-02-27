@@ -1,11 +1,12 @@
+import os
 import asyncio
 import argparse
 from datetime import datetime, timedelta
-from matplotlib import cm, patches, ticker
+from matplotlib import cm, ticker
 import matplotlib.pyplot as plt
 import numpy as np
 from settings import DB, LOGGER, MONGO_COLLECTION_INTEREST, MONGO_COLLECTION_DATA, \
-    MONGO_COLLECTION_LP_PACKET_INTEREST, MONGO_COLLECTION_LP_PACKET_DATA
+    MONGO_COLLECTION_LP_PACKET_INTEREST, MONGO_COLLECTION_LP_PACKET_DATA, DATA_DIR
 
 
 class Plot:
@@ -16,6 +17,7 @@ class Plot:
     def __init__(self, db, collections):
         self.db = db
         self.collections = collections
+        self.save_fig = False
 
     async def _components_hexbin(self):
         i_d = []
@@ -42,9 +44,9 @@ class Plot:
 
         fig, ax = plt.subplots(figsize=(12, 7))
         hb1 = ax.hexbin(*zip(*i_d), gridsize=25, cmap='Blues',
-                        alpha=0.9, edgecolor='gray', mincnt=2000)
+                        alpha=0.9, mincnt=200, edgecolors='blue')
         hb2 = ax.hexbin(*zip(*d_d), gridsize=25, cmap='Oranges',
-                        alpha=0.9, edgecolor='gray', mincnt=2000)
+                        alpha=0.9, mincnt=200, edgecolors='orange')
 
         cb1 = fig.colorbar(hb1)
         cb1.set_label('Interest Frequency', fontsize=12)
@@ -53,11 +55,16 @@ class Plot:
 
         ax.set_title('Name Length vs Number of Components', fontsize=16)
         ax.set_xlabel('Number of Components', fontsize=12)
-        ax.set_ylabel('Name Length', fontsize=12)
+        ax.set_ylabel('Name Length (Bytes)', fontsize=12)
 
-        handles = [patches.Patch(color=cm.Blues(0.5), label='Interest'),
-                   patches.Patch(color=cm.Oranges(0.5), label='Data')]
-        ax.legend(handles=handles, fontsize=12)
+        ax.grid(axis='y')
+        ax.yaxis.set_ticks(np.arange(0, ax.get_ylim()[1], 100))
+
+        if self.save_fig:
+            fig.savefig(os.path.join(DATA_DIR, 'hexbin.pdf'),
+                        bbox_inches='tight')
+            LOGGER.info(
+                f'Hexbin saved to {os.path.join(DATA_DIR, "hexbin.pdf")}')
 
         plt.show()
 
@@ -97,7 +104,7 @@ class Plot:
         d_cdf = np.cumsum(d_counts)
         d_cdf = d_cdf / d_cdf[-1]
 
-        _, ax = plt.subplots(figsize=(10, 7))
+        fig, ax = plt.subplots(figsize=(12, 7))
         ax.plot(i_bin_edges[:-1], i_cdf, label='Interest')
         ax.plot(d_bin_edges[:-1], d_cdf, label='Data')
 
@@ -110,6 +117,12 @@ class Plot:
         ax.spines['bottom'].set_linewidth(0.5)
         ax.spines['left'].set_linewidth(0.5)
         ax.legend()
+
+        if self.save_fig:
+            fig.savefig(os.path.join(DATA_DIR, 'cdf.pdf'),
+                        bbox_inches='tight')
+            LOGGER.info(f'CDF saved to {os.path.join(DATA_DIR, "cdf.pdf")}')
+
         plt.show()
 
     async def _packets_histogram(self, duration):
@@ -160,7 +173,7 @@ class Plot:
                 packet_t / 1e9)
 
         # plot
-        _, ax = plt.subplots(figsize=(10, 7))
+        fig, ax = plt.subplots(figsize=(12, 7))
         rshift = 1
         ax.bar(np.arange(num_durations) + rshift / 2, interest_num_packets,
                color=cm.Paired(0), label='Interest packets')
@@ -175,6 +188,13 @@ class Plot:
         ax.set_xlabel('Timestamp')
         ax.set_ylabel(f'Packets per {duration} minutes')
         ax.legend()
+
+        if self.save_fig:
+            fig.savefig(os.path.join(DATA_DIR, f'histogram-{duration}.pdf'),
+                        bbox_inches='tight')
+            LOGGER.info(
+                f'Histogram saved to {os.path.join(DATA_DIR, f"histogram-{duration}.pdf")}')
+
         plt.show()
 
     async def plot(self, plot_type, duration):
@@ -195,7 +215,9 @@ if __name__ == '__main__':
                                  Plot.COMPONENTS_HEXBIN, Plot.COMPONENTS_CDF],
                         help=f'Select plot type from {", ".join([Plot.PACKETS_HISTOGRAM, Plot.COMPONENTS_HEXBIN, Plot.COMPONENTS_CDF])} (default: {Plot.PACKETS_HISTOGRAM})')
     parser.add_argument('--duration', default=60, type=int,
-                        help=f'Duration in minutes to group packets (default: 60) (applicable only for packets_histogram plot)')
+                        help=f'Duration in minutes to group packets (default: 60) (applicable only for {Plot.PACKETS_HISTOGRAM} plot)')
+    parser.add_argument('--save-fig', default=False, action=argparse.BooleanOptionalAction,
+                        help='Save figure to file (default: False).')
     args = parser.parse_args()
 
     if args.plot_type == Plot.PACKETS_HISTOGRAM and args.duration <= 0:
@@ -206,4 +228,5 @@ if __name__ == '__main__':
     plot = Plot(DB, {'INTEREST': MONGO_COLLECTION_INTEREST, 'DATA': MONGO_COLLECTION_DATA,
                      'LP_PACKET_INTEREST': MONGO_COLLECTION_LP_PACKET_INTEREST, 'LP_PACKET_DATA': MONGO_COLLECTION_LP_PACKET_DATA})
 
+    plot.save_fig = args.save_fig
     asyncio.run(plot.plot(args.plot_type, args.duration))
