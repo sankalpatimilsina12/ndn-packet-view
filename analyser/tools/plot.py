@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from matplotlib import cm, ticker
 import matplotlib.pyplot as plt
 import numpy as np
+from ndn.encoding import Name
 from settings import DB, LOGGER, MONGO_COLLECTION_INTEREST, MONGO_COLLECTION_DATA, \
     MONGO_COLLECTION_LP_PACKET_INTEREST, MONGO_COLLECTION_LP_PACKET_DATA, DATA_DIR
 
@@ -28,7 +29,7 @@ class Plot:
                 if collection in [self.collections['INTEREST'], self.collections['DATA']]:
                     n = document['_source']['layers']['ndn']['ndn_name']
                     num_c = len(n.split('/'))
-                    name_len = len(n)
+                    name_len = len(Name.to_bytes(n))
                     if collection == self.collections['INTEREST']:
                         i_d.append((num_c, name_len))
                     else:
