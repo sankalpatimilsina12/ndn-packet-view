@@ -45,9 +45,9 @@ class Plot:
 
         fig, ax = plt.subplots(figsize=(12, 7))
         hb1 = ax.hexbin(*zip(*i_d), gridsize=25, cmap='Blues',
-                        alpha=0.9, mincnt=200, edgecolors='blue')
+                        alpha=0.9, mincnt=25, edgecolors='blue')
         hb2 = ax.hexbin(*zip(*d_d), gridsize=25, cmap='Oranges',
-                        alpha=0.9, mincnt=200, edgecolors='orange')
+                        alpha=0.9, mincnt=25, edgecolors='orange')
 
         cb1 = fig.colorbar(hb1)
         cb1.set_label('Interest Frequency', fontsize=12)
@@ -59,7 +59,7 @@ class Plot:
 
         ax.grid(axis='y')
         ax.set_ylim(bottom=0)
-        ax.yaxis.set_ticks(np.arange(0, ax.get_ylim()[1], 100))
+        ax.yaxis.set_ticks(np.arange(0, ax.get_ylim()[1], 50))
 
         if self.save_fig:
             fig.savefig(os.path.join(DATA_DIR, 'hexbin.pdf'),
@@ -70,30 +70,26 @@ class Plot:
         plt.show()
 
     async def _components_cdf(self):
-        interests = self.db[self.collections['INTEREST']]
-        data = self.db[self.collections['DATA']]
-        lp_interest = self.db[self.collections['LP_PACKET_INTEREST']]
-        lp_data = self.db[self.collections['LP_PACKET_DATA']]
         i_num_components = []
         d_num_components = []
-        lp_interest_num_components = []
-        lp_data_num_components = []
 
-        async for interest in interests.find():
-            i_num_components.append(len(
-                interest['_source']['layers']['ndn']['ndn_name_tree']['ndn_genericnamecomponent']))
-        async for d in data.find():
-            d_num_components.append(len(
-                d['_source']['layers']['ndn']['ndn_name_tree']['ndn_genericnamecomponent']))
-        async for lp_interest in lp_interest.find():
-            lp_interest_num_components.append(len(
-                lp_interest['_source']['layers']['ndn'][1]['ndn_name_tree']['ndn_genericnamecomponent']))
-        async for lp_data in lp_data.find():
-            lp_data_num_components.append(len(
-                lp_data['_source']['layers']['ndn'][1]['ndn_name_tree']['ndn_genericnamecomponent']))
-
-        i_num_components += lp_interest_num_components
-        d_num_components += lp_data_num_components
+        pipeline = [{'$project': {'_id': 0, '_source.layers.ndn': 1}}]
+        for collection in self.collections.values():
+            async for document in self.db[collection].aggregate(pipeline):
+                if collection in [self.collections['INTEREST'], self.collections['DATA']]:
+                    n = document['_source']['layers']['ndn']['ndn_name']
+                    num_c = len(n.split('/')) - 1
+                    if collection == self.collections['INTEREST']:
+                        i_num_components.append(num_c)
+                    else:
+                        d_num_components.append(num_c)
+                elif collection in [self.collections['LP_PACKET_INTEREST'], self.collections['LP_PACKET_DATA']]:
+                    n = document['_source']['layers']['ndn'][1]['ndn_name']
+                    num_c = len(n.split('/')) - 1
+                    if collection == self.collections['LP_PACKET_INTEREST']:
+                        i_num_components.append(num_c)
+                    else:
+                        d_num_components.append(num_c)
 
         i_counts, i_bin_edges = np.histogram(
             i_num_components, bins=np.arange(1, max(i_num_components)+1))
@@ -116,6 +112,7 @@ class Plot:
         ax.spines['right'].set_visible(False)
         ax.spines['bottom'].set_linewidth(0.5)
         ax.spines['left'].set_linewidth(0.5)
+        ax.grid(axis='y')
         ax.legend()
 
         if self.save_fig:
