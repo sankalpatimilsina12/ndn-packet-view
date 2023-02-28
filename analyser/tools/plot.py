@@ -28,7 +28,7 @@ class Plot:
             async for document in self.db[collection].aggregate(pipeline):
                 if collection in [self.collections['INTEREST'], self.collections['DATA']]:
                     n = document['_source']['layers']['ndn']['ndn_name']
-                    num_c = len(n.split('/'))
+                    num_c = len(n.split('/')) - 1
                     name_len = len(Name.to_bytes(n))
                     if collection == self.collections['INTEREST']:
                         i_d.append((num_c, name_len))
@@ -36,7 +36,7 @@ class Plot:
                         d_d.append((num_c, name_len))
                 elif collection in [self.collections['LP_PACKET_INTEREST'], self.collections['LP_PACKET_DATA']]:
                     n = document['_source']['layers']['ndn'][1]['ndn_name']
-                    num_c = len(n.split('/'))
+                    num_c = len(n.split('/')) - 1
                     name_len = len(Name.to_bytes(n))
                     if collection == self.collections['LP_PACKET_INTEREST']:
                         i_d.append((num_c, name_len))
